@@ -44,6 +44,22 @@ def parseQueryAggregates(query):
 
     return aggregated_columns
 
+def parseQueryGroupBy(query):
+    # Parse the SQL query
+    parsed_query = sqlglot.parse_one(query)
+
+    # List to hold the aggregation columns
+    grouped_columns = []
+
+    # Loop through all grouped attributes in the query
+    for agg_func in parsed_query.find_all(sqlglot.expressions.Group):
+        # Get the column being grouped
+        for column in agg_func.find_all(sqlglot.expressions.Column):
+            table_name = column.table
+            column_name = column.name
+            grouped_columns.append((table_name, column_name))
+
+    return grouped_columns
 
 def main():
     #path_query = "../queries/1a.sql"
@@ -61,6 +77,12 @@ def main():
     # Print the aggregated columns
     for table, column in aggregated_columns:
         print(f"Table: {table}, Column in Aggregation: {column}")
+
+    grouped_colums = parseQueryGroupBy(query)
+
+    # Print the aggregated columns
+    for table, column in grouped_colums:
+        print(f"Table: {table}, Column in Group-by: {column}")
 
 if __name__ == "__main__":
     main()
