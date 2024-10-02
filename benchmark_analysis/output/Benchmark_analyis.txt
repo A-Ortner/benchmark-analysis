@@ -1,0 +1,12 @@
+JOB
+Average number of tables per query: 8.578947368421053
+Average number of grouped attributes per query: 0.0
+TPC_DS
+Average number of tables per query: 8.383838383838384
+Average number of grouped attributes per query: 3.808080808080808
+TPC_H
+Average number of tables per query: 4.777777777777778
+Average number of grouped attributes per query: 0.05555555555555555
+LSQB
+Average number of tables per query: nan
+Average number of grouped attributes per query: nan
