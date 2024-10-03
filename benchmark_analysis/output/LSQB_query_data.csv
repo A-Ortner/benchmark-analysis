@@ -1,1 +1,12 @@
 ,qID,c_tables,c_groupingAttributes
+0,q1-hint.sql,10,0
+1,q1.sql,10,0
+2,q2.sql,3,0
+3,q3.sql,9,0
+4,q4-hint.sql,4,0
+5,q4.sql,4,0
+6,q5.sql,3,0
+7,q6.sql,3,0
+8,q7.sql,4,0
+9,q8.sql,4,0
+10,q9.sql,4,0

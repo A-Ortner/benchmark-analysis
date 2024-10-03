@@ -65,29 +65,25 @@ def parseQueryGroupBy(query):
 
 
 def getNumberGroupAttributes(query):
-    try:
-        parsed_query = sqlglot.parse_one(query)
-        count_group = 0
+    parsed_query = sqlglot.parse_one(query)
+    count_group = 0
 
-        for agg_func in parsed_query.find_all(sqlglot.expressions.Group):
-            # Get the column being grouped
-            for column in agg_func.find_all(sqlglot.expressions.Column):
-                count_group += 1
+    for agg_func in parsed_query.find_all(sqlglot.expressions.Group):
+        # Get the column being grouped
+        for column in agg_func.find_all(sqlglot.expressions.Column):
+            count_group += 1
 
-        return count_group
-    except sqlglot.errors.ParseError as e:
-        print(f"Error parsing query: {e}")
+    return count_group
+
 
 
 
 
 def getNumberTables(query):
-    try:
-        parsed_query = sqlglot.parse_one(query)
-        table_names = [table.name for table in parsed_query.find_all(sqlglot.expressions.Table)]
-        return len(table_names)
-    except sqlglot.errors.ParseError as e:
-        print(f"Error parsing query: {e}")
+    parsed_query = sqlglot.parse_one(query)
+    table_names = [table.name for table in parsed_query.find_all(sqlglot.expressions.Table)]
+    return len(table_names)
+
 
 
 def analyse_queries(path):
@@ -99,33 +95,43 @@ def analyse_queries(path):
         benchmark_name = "TPC_H"
     elif path.endswith("tpcds-queries/"):
         benchmark_name = "TPC_DS"
-    elif path.endswith("lsqb/"):
+    elif path.endswith("lsqb/sql/"):
         benchmark_name = "LSQB"
     else:
+        print("Unknown benchmark type.")
         exit(0)
 
     query_info = {}  # qID, #tables, #groupingAttributes
     idx = 0
+    skipped = 0
     # Open one of the files,
     for data_file in sorted(os.listdir(path)):
 
         if data_file.endswith(".sql") and not data_file.endswith("schema.sql"):
-            print(data_file)
+            if benchmark_name == "LSQB" and not data_file.startswith("q"):
+                continue
+
+
             q_path = path + data_file
             with open(q_path, 'r') as f:
                 query = f.read()
-                num_tables = getNumberTables(query)
-                num_group = getNumberGroupAttributes(query)
-                query_info[idx] = (data_file, num_tables, num_group)
+                try:
+                    num_tables = getNumberTables(query)
+                    num_group = getNumberGroupAttributes(query)
+                    query_info[idx] = (data_file, num_tables, num_group)
+                except sqlglot.errors.ParseError as e:
+                    skipped += 1
+                    print(benchmark_name + ": " + data_file)
+                    print(f"Error parsing query: {e}")
+
         idx += 1
     df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes'])
     df = df.T  # transpose matrix
-    print(benchmark_name)
-    print(df["c_tables"].mean())
-    print(df["c_groupingAttributes"].mean())
 
     f = open("../output/Benchmark_analyis.txt", "a")
     f.write(benchmark_name+"\n")
+    f.write("Queries analyzed: " + str(len(query_info)) + "\n")
+    f.write("Queries skipped: " + str(skipped) + "\n")
     f.write("Average number of tables per query: " + str(df["c_tables"].mean()) + '\n')
     f.write("Average number of grouped attributes per query: " + str(df["c_groupingAttributes"].mean()) + '\n')
     f.close()
@@ -141,7 +147,7 @@ def main():
     path_JOB = "../queries/job/"
     path_TPCDS = "../queries/tpcds-queries/"
     path_TPCH = "../queries/tpch-queries/"
-    path_LSQB = "../queries/lsqb/"
+    path_LSQB = "../queries/lsqb/sql/"
     paths = [path_JOB, path_TPCDS, path_TPCH,path_LSQB]
 
     for path in paths:

@@ -1,11 +1,8 @@
 ,qID,c_tables,c_groupingAttributes
-0,11-hint.sql,,
 1,11-simple.sql,3,0
-2,11.sql,,
 3,13-simple.sql,2,1
 4,2-subq-hint.sql,4,0
 5,2-subq.sql,4,0
-6,2.sql,,
 7,count-2.sql,5,0
 8,count-3.sql,5,0
 9,median-1-hint.sql,6,0
