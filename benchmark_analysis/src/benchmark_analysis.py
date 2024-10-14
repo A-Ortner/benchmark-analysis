@@ -60,9 +60,9 @@ def parseQueryGroupBy(query):
     grouped_columns = []
 
     # Loop through all grouped attributes in the query
-    for agg_func in parsed_query.find_all(sqlglot.expressions.Group):
+    for group_by in parsed_query.find_all(sqlglot.expressions.Group):
         # Get the column being grouped
-        for column in agg_func.find_all(sqlglot.expressions.Column):
+        for column in group_by.find_all(sqlglot.expressions.Column):
             table_name = column.table
             column_name = column.name
             grouped_columns.append((table_name, column_name))
@@ -70,17 +70,30 @@ def parseQueryGroupBy(query):
     return grouped_columns
 
 # query: query to be parsed
-# returns: number of attributes that appear in aggregate functions of the query
+# returns: number of attributes that appear in group by statement of the query
 def getNumberGroupAttributes(query):
     parsed_query = sqlglot.parse_one(query)
     count_group = 0
 
-    for agg_func in parsed_query.find_all(sqlglot.expressions.Group):
+    for group_by in parsed_query.find_all(sqlglot.expressions.Group):
         # Get the column being grouped
-        for column in agg_func.find_all(sqlglot.expressions.Column):
+        for column in group_by.find_all(sqlglot.expressions.Column):
             count_group += 1
 
     return count_group
+
+# query: query to be parsed
+# returns: number of attributes that appear in aggregate functions of the query
+def getNumberAggAttributes(query):
+    parsed_query = sqlglot.parse_one(query)
+    count_agg = 0
+
+    for agg_func in parsed_query.find_all(sqlglot.expressions.AggFunc):
+        # Get the column being grouped
+        for column in agg_func.find_all(sqlglot.expressions.Column):
+            count_agg += 1
+
+    return count_agg
 
 # query: query to be parsed
 # returns: number of tables that are part of the query
@@ -107,7 +120,7 @@ def analyse_queries(path):
         print("Unknown benchmark type.")
         exit(0)
 
-    query_info = {}  # qID, #tables, #groupingAttributes
+    query_info = {}  # qID, #tables, #groupingAttributes, #aggAttributes
     idx = 0
     skipped = 0
     # Open one of the files,
@@ -124,14 +137,15 @@ def analyse_queries(path):
                 try:
                     num_tables = getNumberTables(query)
                     num_group = getNumberGroupAttributes(query)
-                    query_info[idx] = (data_file, num_tables, num_group)
+                    num_agg = getNumberAggAttributes(query)
+                    query_info[idx] = (data_file, num_tables, num_group, num_agg)
                 except sqlglot.errors.ParseError as e:
                     skipped += 1
                     print(benchmark_name + ": " + data_file)
                     print(f"Error parsing query: {e}")
 
         idx += 1
-    df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes'])
+    df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes', 'c_aggAttributes'])
     df = df.T  # transpose matrix
 
     f = open("../output/Benchmark_analyis.txt", "a")
@@ -140,6 +154,7 @@ def analyse_queries(path):
     f.write("Queries skipped: " + str(skipped) + "\n")
     f.write("Average number of tables per query: " + str(df["c_tables"].mean()) + '\n')
     f.write("Average number of grouped attributes per query: " + str(df["c_groupingAttributes"].mean()) + '\n')
+    f.write("Average number of aggregated attributes per query: " + str(df["c_aggAttributes"].mean()) + '\n')
     f.close()
     df.to_csv("../output/"+ benchmark_name +'_query_data.csv')
 
