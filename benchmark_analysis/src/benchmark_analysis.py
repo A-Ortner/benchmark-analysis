@@ -8,6 +8,8 @@ def readFile(path):
     with open(path, 'r') as f:
         return f.read()
 
+# query: query to be parsed
+# returns: list of attributes of different relations that are part of the query
 def parseQueryTablesAttributes(query):
     # Parse the SQL query
     parsed_query = sqlglot.parse_one(query)
@@ -29,6 +31,8 @@ def parseQueryTablesAttributes(query):
 
     return table_columns
 
+# query: query to be parsed
+# returns: list of attributes that appear in aggregate functions of the query
 def parseQueryAggregates(query):
     # Parse the SQL query
     parsed_query = sqlglot.parse_one(query)
@@ -46,6 +50,8 @@ def parseQueryAggregates(query):
 
     return aggregated_columns
 
+# query: query to be parsed
+# returns: list of attributes that appear in group by statements of the query
 def parseQueryGroupBy(query):
     # Parse the SQL query
     parsed_query = sqlglot.parse_one(query)
@@ -63,7 +69,8 @@ def parseQueryGroupBy(query):
 
     return grouped_columns
 
-
+# query: query to be parsed
+# returns: number of attributes that appear in aggregate functions of the query
 def getNumberGroupAttributes(query):
     parsed_query = sqlglot.parse_one(query)
     count_group = 0
@@ -75,17 +82,16 @@ def getNumberGroupAttributes(query):
 
     return count_group
 
-
-
-
-
+# query: query to be parsed
+# returns: number of tables that are part of the query
 def getNumberTables(query):
     parsed_query = sqlglot.parse_one(query)
     table_names = [table.name for table in parsed_query.find_all(sqlglot.expressions.Table)]
     return len(table_names)
 
 
-
+# path: path to a folder where job, tpc-h, tpc-ds and lsqb benchmark queries can be found
+# returns: in /output, the files Benchmark_analysis.txt will be created as well as *_query_data.csv for each benchmark
 def analyse_queries(path):
     benchmark_name = ""
 
