@@ -1,6 +1,7 @@
 import sqlglot
 import pandas as pd
 import os
+from sqlglot import exp
 
 path = "../queries/1a.sql"
 
@@ -102,6 +103,79 @@ def getNumberTables(query):
     table_names = [table.name for table in parsed_query.find_all(sqlglot.expressions.Table)]
     return len(table_names)
 
+# query: query to be parsed
+# returns: list of all aggregated attributes in the query and the corresponding relation they appear in
+def getAggregatesRelations(query):
+    # Parse the query using sqlglot
+    parsed_query = sqlglot.parse_one(query)
+
+    # Dictionary to hold aggregate functions and their corresponding relations
+    aggregates_relations = {}
+
+    # Traverse the parsed query to extract aggregate functions
+    for agg in parsed_query.find_all(exp.AggFunc):
+        # Find the column(s) inside the aggregate function
+        columns = agg.find_all(exp.Column)
+
+        for column in columns:
+            # Get the column name and table/relation name if available
+            column_name = column.name
+            table_name = column.table
+
+            if table_name:
+                if agg not in aggregates_relations:
+                    aggregates_relations[agg] = set()
+                # Add the table/relation name to the set for the current aggregate function
+                aggregates_relations[agg].add(table_name)
+
+    return aggregates_relations
+
+# query: query to be parsed
+# returns: True if all aggregated attributes appear in the same relation (query has guarded aggregates)
+def isAggregateGuarded(query):
+    aggregates_relations = getAggregatesRelations(query)
+    # Check if all attributes in the aggregate functions come from the same relation
+    for agg, relations in aggregates_relations.items():
+        if len(relations) > 1:
+            return False
+    return True
+
+# query: query to be parsed
+# returns: list of all grouped attributes in the query and the corresponding relation they appear in
+def getGroupByRelations(query):
+    # Parse the query using sqlglot
+    parsed_query = sqlglot.parse_one(query)
+
+    # Dictionary to hold aggregate functions and their corresponding relations
+    grouped_attributes_relations = {}
+
+    # Traverse the parsed query to extract aggregate functions
+    for group_att in parsed_query.find_all(exp.Group):
+        # Find the column(s) inside the aggregate function
+        columns = group_att.find_all(exp.Column)
+
+        for column in columns:
+            # Get the column name and table/relation name if available
+            column_name = column.name
+            table_name = column.table
+
+            if table_name:
+                if group_att not in grouped_attributes_relations:
+                    grouped_attributes_relations[group_att] = set()
+                # Add the table/relation name to the set for the current grouped attribute
+                grouped_attributes_relations[group_att].add(table_name)
+
+    return grouped_attributes_relations
+
+# query: query to be parsed
+# returns: True if all grouped attributes appear in the same relation (query has guarded aggregates)
+def isGroupGuarded(query):
+    grouped_att_relations = getGroupByRelations(query)
+    # Check if all attributes in the aggregate functions come from the same relation
+    for att, relations in grouped_att_relations.items():
+        if len(relations) > 1:
+            return False
+    return True
 
 # path: path to a folder where job, tpc-h, tpc-ds and lsqb benchmark queries can be found
 # returns: in /output, the files Benchmark_analysis.txt will be created as well as *_query_data.csv for each benchmark
@@ -120,9 +194,11 @@ def analyse_queries(path):
         print("Unknown benchmark type.")
         exit(0)
 
-    query_info = {}  # qID, #tables, #groupingAttributes, #aggAttributes
+    query_info = {}  # qID, #tables, #groupingAttributes, #aggAttributes, #aggGuarded, #groupGuarded
     idx = 0
     skipped = 0
+    c_partly_guarded = 0
+
     # Open one of the files,
     for data_file in sorted(os.listdir(path)):
 
@@ -138,14 +214,22 @@ def analyse_queries(path):
                     num_tables = getNumberTables(query)
                     num_group = getNumberGroupAttributes(query)
                     num_agg = getNumberAggAttributes(query)
-                    query_info[idx] = (data_file, num_tables, num_group, num_agg)
+                    agg_guarded = isAggregateGuarded(query)
+                    group_guarded = isGroupGuarded(query)
+
+                    if not agg_guarded and group_guarded:
+                        c_partly_guarded += 1
+                        print(q_path)
+
+
+                    query_info[idx] = (data_file, num_tables, num_group, num_agg, agg_guarded, group_guarded)
                 except sqlglot.errors.ParseError as e:
                     skipped += 1
                     print(benchmark_name + ": " + data_file)
                     print(f"Error parsing query: {e}")
 
         idx += 1
-    df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes', 'c_aggAttributes'])
+    df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes', 'c_aggAttributes', 'agg_guarded', 'group_guarded'])
     df = df.T  # transpose matrix
 
     f = open("../output/Benchmark_analyis.txt", "a")
@@ -155,6 +239,9 @@ def analyse_queries(path):
     f.write("Average number of tables per query: " + str(df["c_tables"].mean()) + '\n')
     f.write("Average number of grouped attributes per query: " + str(df["c_groupingAttributes"].mean()) + '\n')
     f.write("Average number of aggregated attributes per query: " + str(df["c_aggAttributes"].mean()) + '\n')
+    f.write("Number of aggregate-guarded queries: " + str(df['agg_guarded'].sum()) + '\n')
+    f.write("Number of group-guarded queries: " + str(df['group_guarded'].sum()) + '\n')
+    f.write("Number of queries that are group-guarded, but not aggregate-guarded: " + str(c_partly_guarded) + '\n')
     f.close()
     df.to_csv("../output/"+ benchmark_name +'_query_data.csv')
 
