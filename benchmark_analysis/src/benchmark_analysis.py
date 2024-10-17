@@ -5,12 +5,14 @@ from sqlglot import exp
 
 path = "../queries/1a.sql"
 
+
 def readFile(path):
     with open(path, 'r') as f:
         return f.read()
 
+
 # query: query to be parsed
-# returns: list of attributes of different relations that are part of the query
+# returns: <table, {attributes}>
 def parseQueryTablesAttributes(query):
     # Parse the SQL query
     parsed_query = sqlglot.parse_one(query)
@@ -32,6 +34,31 @@ def parseQueryTablesAttributes(query):
 
     return table_columns
 
+
+# query: query to be parsed
+# returns: <att, {tables}>
+def parseQueryAttributeTables(query):
+    # Parse the SQL query
+    parsed_query = sqlglot.parse_one(query)
+
+    # Dictionary to hold table names and their corresponding attributes
+    columns_tables = {}
+
+    # Loop through all columns in the SELECT clause
+    for column in parsed_query.find_all(sqlglot.expressions.Column):
+        # Get the table and column names
+        table_name = column.table
+        column_name = column.name
+
+        # Add the column name under the corresponding table name in the dictionary
+        if column_name:
+            if column_name not in columns_tables:
+                columns_tables[column_name] = []
+            columns_tables[column_name].append(table_name)
+
+    return columns_tables
+
+
 # query: query to be parsed
 # returns: list of attributes that appear in aggregate functions of the query
 def parseQueryAggregates(query):
@@ -50,6 +77,7 @@ def parseQueryAggregates(query):
             aggregated_columns.append((table_name, column_name))
 
     return aggregated_columns
+
 
 # query: query to be parsed
 # returns: list of attributes that appear in group by statements of the query
@@ -70,6 +98,7 @@ def parseQueryGroupBy(query):
 
     return grouped_columns
 
+
 # query: query to be parsed
 # returns: number of attributes that appear in group by statement of the query
 def getNumberGroupAttributes(query):
@@ -82,6 +111,7 @@ def getNumberGroupAttributes(query):
             count_group += 1
 
     return count_group
+
 
 # query: query to be parsed
 # returns: number of attributes that appear in aggregate functions of the query
@@ -96,6 +126,7 @@ def getNumberAggAttributes(query):
 
     return count_agg
 
+
 # query: query to be parsed
 # returns: number of tables that are part of the query
 def getNumberTables(query):
@@ -103,11 +134,13 @@ def getNumberTables(query):
     table_names = [table.name for table in parsed_query.find_all(sqlglot.expressions.Table)]
     return len(table_names)
 
+
 # query: query to be parsed
 # returns: list of all aggregated attributes in the query and the corresponding relation they appear in
 def getAggregatesRelations(query):
     # Parse the query using sqlglot
     parsed_query = sqlglot.parse_one(query)
+    att_tables = parseQueryAttributeTables(query)
 
     # Dictionary to hold aggregate functions and their corresponding relations
     aggregates_relations = {}
@@ -120,31 +153,51 @@ def getAggregatesRelations(query):
         for column in columns:
             # Get the column name and table/relation name if available
             column_name = column.name
-            table_name = column.table
+            table_name = att_tables[column_name][0]  #todo: assumption that two relations to not have attributes with the same name
 
             if table_name:
-                if agg not in aggregates_relations:
-                    aggregates_relations[agg] = set()
+                if column_name not in aggregates_relations:
+                    aggregates_relations[column_name] = set()
                 # Add the table/relation name to the set for the current aggregate function
-                aggregates_relations[agg].add(table_name)
+                aggregates_relations[column_name].add(table_name)
 
     return aggregates_relations
+
 
 # query: query to be parsed
 # returns: True if all aggregated attributes appear in the same relation (query has guarded aggregates)
 def isAggregateGuarded(query):
     aggregates_relations = getAggregatesRelations(query)
-    # Check if all attributes in the aggregate functions come from the same relation
-    for agg, relations in aggregates_relations.items():
-        if len(relations) > 1:
-            return False
-    return True
+
+    # if there are 0-1 aggregates in the query, the query is trivially guarded
+    if len(aggregates_relations) <= 1:
+        return True
+
+    # Convert the lists of relations to sets for easier comparison
+    relations_sets = {agg: set(relations) for agg, relations in aggregates_relations.items()}
+
+    # Get the intersection of all relation sets
+    common_relations = None
+    for relations in relations_sets.values():
+        if common_relations is None:
+            common_relations = relations
+        else:
+            common_relations &= relations  # Find the intersection of sets
+
+    # If there is at least one common relation in all sets, return True
+    if common_relations:
+        return True
+
+    # If no common relation exists, return False
+    return False
+
 
 # query: query to be parsed
 # returns: list of all grouped attributes in the query and the corresponding relation they appear in
 def getGroupByRelations(query):
     # Parse the query using sqlglot
     parsed_query = sqlglot.parse_one(query)
+    att_tables = parseQueryAttributeTables(query)
 
     # Dictionary to hold aggregate functions and their corresponding relations
     grouped_attributes_relations = {}
@@ -157,25 +210,44 @@ def getGroupByRelations(query):
         for column in columns:
             # Get the column name and table/relation name if available
             column_name = column.name
-            table_name = column.table
+            table_name = att_tables[column_name][0]  #todo: assumption that two relations do not have attributes with the same name
 
             if table_name:
-                if group_att not in grouped_attributes_relations:
-                    grouped_attributes_relations[group_att] = set()
+                if column_name not in grouped_attributes_relations:
+                    grouped_attributes_relations[column_name] = set()
                 # Add the table/relation name to the set for the current grouped attribute
-                grouped_attributes_relations[group_att].add(table_name)
+                grouped_attributes_relations[column_name].add(table_name)
 
     return grouped_attributes_relations
+
 
 # query: query to be parsed
 # returns: True if all grouped attributes appear in the same relation (query has guarded aggregates)
 def isGroupGuarded(query):
     grouped_att_relations = getGroupByRelations(query)
-    # Check if all attributes in the aggregate functions come from the same relation
-    for att, relations in grouped_att_relations.items():
-        if len(relations) > 1:
-            return False
-    return True
+
+    # if there are 0-1 aggregates in the query, the query is trivially guarded
+    if len(grouped_att_relations) <= 1:
+        return True
+
+        # Convert the lists of relations to sets for easier comparison
+    relations_sets = {attr: set(relations) for attr, relations in grouped_att_relations.items()}
+
+    # Get the intersection of all relation sets
+    common_relations = None
+    for relations in relations_sets.values():
+        if common_relations is None:
+            common_relations = relations
+        else:
+            common_relations &= relations  # Find the intersection of sets
+
+    # If there is at least one common relation in all sets, return True
+    if common_relations:
+        return True
+
+    # If no common relation exists, return False
+    return False
+
 
 # path: path to a folder where job, tpc-h, tpc-ds and lsqb benchmark queries can be found
 # returns: in /output, the files Benchmark_analysis.txt will be created as well as *_query_data.csv for each benchmark
@@ -190,6 +262,8 @@ def analyse_queries(path):
         benchmark_name = "TPC_DS"
     elif path.endswith("lsqb/sql/"):
         benchmark_name = "LSQB"
+    elif path.endswith("tpcds-syn/"):
+        benchmark_name = "TPC_DS_SYN"
     else:
         print("Unknown benchmark type.")
         exit(0)
@@ -206,7 +280,6 @@ def analyse_queries(path):
             if benchmark_name == "LSQB" and not data_file.startswith("q"):
                 continue
 
-
             q_path = path + data_file
             with open(q_path, 'r') as f:
                 query = f.read()
@@ -217,11 +290,6 @@ def analyse_queries(path):
                     agg_guarded = isAggregateGuarded(query)
                     group_guarded = isGroupGuarded(query)
 
-                    if not agg_guarded and group_guarded:
-                        c_partly_guarded += 1
-                        print(q_path)
-
-
                     query_info[idx] = (data_file, num_tables, num_group, num_agg, agg_guarded, group_guarded)
                 except sqlglot.errors.ParseError as e:
                     skipped += 1
@@ -229,11 +297,12 @@ def analyse_queries(path):
                     print(f"Error parsing query: {e}")
 
         idx += 1
-    df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes', 'c_aggAttributes', 'agg_guarded', 'group_guarded'])
+    df = pd.DataFrame(query_info, index=['qID', 'c_tables', 'c_groupingAttributes', 'c_aggAttributes', 'agg_guarded',
+                                         'group_guarded'])
     df = df.T  # transpose matrix
 
     f = open("../output/Benchmark_analyis.txt", "a")
-    f.write(benchmark_name+"\n")
+    f.write(benchmark_name + "\n")
     f.write("Queries analyzed: " + str(len(query_info)) + "\n")
     f.write("Queries skipped: " + str(skipped) + "\n")
     f.write("Average number of tables per query: " + str(df["c_tables"].mean()) + '\n')
@@ -243,27 +312,25 @@ def analyse_queries(path):
     f.write("Number of group-guarded queries: " + str(df['group_guarded'].sum()) + '\n')
     f.write("Number of queries that are group-guarded, but not aggregate-guarded: " + str(c_partly_guarded) + '\n')
     f.close()
-    df.to_csv("../output/"+ benchmark_name +'_query_data.csv')
+    df.to_csv("../output/" + benchmark_name + '_query_data.csv')
+
 
 def main():
     #path_query = "../queries/1a.sql"
     path_query = "../../../spark-eval/benchmark/job/1a.sql"
     path_JOB_external = "../../../spark-eval/benchmark/job/"
     path_LSQB_external = "../../../spark-eval/benchmark/lsqb/"
-    path_TPCH_external = "../../../spark-eval/benchmark/tpch-queries/" #error in 11-hint.sql
+    path_TPCH_external = "../../../spark-eval/benchmark/tpch-queries/"  #error in 11-hint.sql
     path_TPCDS_external = "../../../spark-eval/benchmark/tpcds-queries/"
     path_JOB = "../queries/job/"
     path_TPCDS = "../queries/tpcds-queries/"
     path_TPCH = "../queries/tpch-queries/"
     path_LSQB = "../queries/lsqb/sql/"
-    paths = [path_JOB, path_TPCDS, path_TPCH,path_LSQB]
+    path_tpcds_syn = "../queries/tpcds-syn/"
+    paths = [path_JOB, path_TPCDS, path_TPCH, path_LSQB, path_tpcds_syn]
 
     for path in paths:
-
         analyse_queries(path)
-
-
-
 
 
 if __name__ == "__main__":

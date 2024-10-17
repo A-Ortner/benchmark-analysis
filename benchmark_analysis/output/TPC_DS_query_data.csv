@@ -43,7 +43,7 @@
 41,query46.sql,7,4,2,True,True
 42,query47.sql,8,6,3,True,True
 43,query48.sql,5,0,1,True,True
-44,query49.sql,9,3,12,True,True
+44,query49.sql,9,3,12,False,False
 45,query5.sql,16,5,15,True,True
 46,query50.sql,5,10,16,True,True
 47,query51.sql,6,4,6,True,True
@@ -71,7 +71,7 @@
 70,query72.sql,11,3,2,True,True
 71,query73.sql,5,2,0,True,True
 72,query74.sql,10,8,2,True,True
-73,query75.sql,14,5,2,True,True
+73,query75.sql,14,5,2,False,False
 74,query76.sql,9,5,1,True,True
 75,query77.sql,22,8,15,True,True
 76,query78.sql,12,9,9,True,True
@@ -95,6 +95,6 @@
 94,query94.sql,6,0,4,True,True
 95,query95.sql,9,0,4,True,True
 96,query96.sql,4,0,0,True,True
-97,query97.sql,6,4,6,False,True
+97,query97.sql,6,4,6,True,True
 98,query98.sql,3,5,4,True,True
 99,query99.sql,5,3,16,True,True
